@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title id="title">US Educational Attainments</title>
+        <style>
+            .hide{
+                display: none;
+            }
+
+            #tooltip{
+                border:1px solid;
+                width:auto;
+                height:30px;
+                position:absolute;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding:5px;
+                background-color: beige;
+            }
+        </style>
+    </head>
+    <body>
+        
+        <h1>US Educational Attainments</h1>
+        <h4 id="description">Percentage of adults age 25 and older with a bachelor's degree or higher (2010-2014)</h4>
+        <div id="tooltip"></div>
+        <svg id="legend"></svg>
+        <svg id="us-map" width="1000" height="1000"></svg>
+        
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://unpkg.com/topojson-client@3"></script>
+        <script>
+            const educationDataUrl = "https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/for_user_education.json";
+            const countyDataUrl = "https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/counties.json"
+            const path = d3.geoPath();
+            const pureWhite = "rgba(220,220,220,0.9)"
+            const veryLightGreen = "rgba(180, 230, 180, 0.9)"
+            const lightGreen = "rgba(130, 225, 130, 0.9)"
+            const mediumLightGreen = "rgba(100, 205, 100, 0.9)"
+            const strongGreen = "rgba(50, 150, 50, 0.9)"
+            const deepGreen = "rgba(0,140,0,0.9)"
+            const veryDeepGreen = "rgba(0,80,0,0.9)"
+            const colorValues =[
+                pureWhite,veryLightGreen,lightGreen,mediumLightGreen,strongGreen,deepGreen,veryDeepGreen
+            ]
+
+            Promise.all([
+                fetch(educationDataUrl).then(res => res.json()),
+                fetch(countyDataUrl).then(res => res.json()) 
+            ]).then(([eduData, countyData])=>{
+                //console.log("Education Data:",eduData)
+                //console.log("County Data",countyData)
+                const counties = topojson.feature(countyData,countyData.objects.counties).features;
+                const states = topojson.feature(countyData,countyData.objects.states).features;
+                //console.log("counties geoJson",counties)
+                const maxEdu = d3.max(eduData,(d=>d.bachelorsOrHigher))
+                const minEdu = d3.min(eduData,(d=>d.bachelorsOrHigher))
+                const x = (maxEdu - minEdu) / 6;
+                const tickValues = [];
+                for (let i = 0; i<6; i++){
+                    tickValues.push(minEdu+i*x)
+                }
+                tickValues.push(maxEdu);
+
+                //x-axis
+                const legend = d3.select("#legend")
+                                    .attr("width",400)
+                                    .attr("height",50)
+                                    .attr("transform","translate(500,30)")
+
+                const xScale = d3.scaleLinear()
+                                .domain([minEdu,maxEdu])
+                                .range([0,320])
+
+                const xAxis = d3.axisBottom(xScale)
+                                .tickValues(tickValues)
+                                .tickFormat(d=>d.toFixed(1)+"%")
+                
+                legend.append("g")
+                    .attr("id","legend-axis")
+                    .attr("transform","translate(40,30)")
+                    .call(xAxis)
+
+                legend.select("#legend-axis")
+                    .selectAll(".tick line")
+                    .attr("dy","-20px")
+                    .attr("y2",10)
+                    .attr("stroke-width",2)
+
+                legend.selectAll("rect")
+                        .data(colorValues)
+                        .enter()
+                        .append("rect")
+                        .attr("x",(d,i)=>40+i*53) // 450 is start of scale, 33 width per rect
+                        .attr("y",20)
+                        .attr("width",53)
+                        .attr("height",10)
+                        .attr("fill",d=>d)
+
+                /*
+                svg.selectAll("rect")
+                    .data(tickValues)
+                    .enter()
+                    .append("rect")
+                    .attr("id","legend")
+                    .attr("x",(d=>xScale(d)))
+                    .attr("y",0)
+                    .attr("width",33)
+                    .attr("height",10)
+                    .attr("transform","translate(66,25)")
+                    .attr("fill",(d=>{
+                        if(d<3){
+                            return "white"
+                        } else if (d>=3 && d<15){
+                            return pureWhite;
+                        } else if(d>=15 && d<27){
+                            return veryLightGreen
+                        }  else if(d>=27 && d<39){
+                            return lightGreen
+                        }
+                        else if(d>=39 && d<51){
+                            return mediumLightGreen
+                        }
+                        else if(d>=51 && d<63){
+                            return strongGreen
+                        }
+                        else if(d>=63 && d<75){
+                            return deepGreen
+                        } else{
+                            return veryDeepGreen
+                        }
+                    }))*/
+
+                const legendRect = document.querySelectorAll("#legend rect")
+                console.log(legendRect)
+
+                //draw states
+                const svg = d3.select("#us-map")
+                svg.selectAll("path")
+                    .data(states)
+                    .enter()
+                    .append('path')
+                    .attr("class","states")
+                    .attr("d",path)
+                    .attr("stroke","black")
+                    .attr("stroke-width",2)
+                    .attr("fill","white")
+
+                //draw counties   
+                svg.selectAll("path.county")
+                    .data(counties)
+                    .enter()
+                    .append("path")
+                    .attr("class","county")
+                    .attr("d",path)
+                    .attr("stroke","transparent")
+                    .attr("data-fips",(county=>county.id))
+                    .attr("data-education",(county=>{
+                        const eduInfo = eduData.find(e=>e.fips === county.id)
+                        return eduInfo.bachelorsOrHigher
+                    }))
+                    .attr("fill",(county)=>{
+                        const eduInfo = eduData.find(e=>e.fips === county.id)
+                        
+                        if (eduInfo.bachelorsOrHigher > maxEdu){
+                            return veryDeepGreen
+                        } else if(eduInfo.bachelorsOrHigher < maxEdu && eduInfo.bachelorsOrHigher>tickValues[5]){
+                            return deepGreen
+                        } else if(eduInfo.bachelorsOrHigher < tickValues[5] && eduInfo.bachelorsOrHigher>tickValues[4]){
+                            return strongGreen
+                        } else if(eduInfo.bachelorsOrHigher < tickValues[4] && eduInfo.bachelorsOrHigher>tickValues[3]){
+                            return mediumLightGreen
+                        } else if(eduInfo.bachelorsOrHigher < tickValues[3] && eduInfo.bachelorsOrHigher>tickValues[2]){
+                            return lightGreen
+                        } else if(eduInfo.bachelorsOrHigher < tickValues[2] && eduInfo.bachelorsOrHigher>tickValues[1]){
+                            return veryLightGreen
+                        } else if(eduInfo.bachelorsOrHigher < tickValues[1] && eduInfo.bachelorsOrHigher>tickValues[0]){
+                            return pureWhite
+                        } else{
+                            return "white"
+                        }
+                    })
+
+                    //mouseover tooltip effect
+                    .on("mouseover",((event,county)=>{
+                        const tooltip = document.getElementById("tooltip");
+                        tooltip.style.display="flex";
+                        
+                        const eduInfo = eduData.find(e=>e.fips === county.id)
+                        const countyName = eduInfo.area_name;
+                        const state = eduInfo.state;
+                        const eduLevel = eduInfo.bachelorsOrHigher;
+                        tooltip.innerHTML = `
+                            <span>${countyName} </span> , <span> ${state}: </span><span>${eduLevel}%</span>
+                        `
+                        tooltip.style.top = event.pageY-20+"px";
+                        tooltip.style.left = event.pageX+30+"px";
+                        d3.select("#tooltip").attr("data-education",eduLevel)
+                    }))
+                    .on("mouseout",((event,county)=>{
+                        const tooltip = document.getElementById("tooltip")
+                        tooltip.style.display="none"
+                    }))
+                    
+
+                
+            });
+            
+        </script>
+        <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+    </body>
+</html>
